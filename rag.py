@@ -1,4 +1,5 @@
-# File: RA1/IL1.4/1-evaluation-rag.py
+# rag.py
+# Sistema RAG con evaluación y monitoreo usando LangChain para embeddings
 import streamlit as st
 import os
 import json
@@ -21,7 +22,7 @@ try:
     from dotenv import load_dotenv
     load_dotenv()
 except ImportError:
-    st.warning("⚠️ python-dotenv no está instalado. Instálalo con: pip install python-dotenv")
+    st.warning("python-dotenv no está instalado. Instálalo con: pip install python-dotenv")
 
 # --- Configuración del Cliente y Modelos de LangChain ---
 # Only set environment variables if they exist
@@ -32,15 +33,15 @@ if github_token:
     os.environ["OPENAI_API_KEY"] = github_token
     os.environ["OPENAI_API_BASE"] = github_base_url
 else:
-    st.error("❌ GITHUB_TOKEN environment variable is not set. Please check your .env file.")
-    st.info("💡 Make sure your .env file contains: GITHUB_TOKEN=your_token_here")
+    st.error("La variable de entorno GITHUB_TOKEN no está configurada. Por favor verifica tu archivo .env.")
+    st.info("Asegúrate de que tu archivo .env contenga: GITHUB_TOKEN=tu_token_aqui")
     st.stop()
 
 st.set_page_config(page_title="RAG Evaluacion", page_icon="📊", layout="wide")
 
 def initialize_client():
     if not github_token:
-        st.error("❌ GitHub token no disponible")
+        st.error("Token de GitHub no disponible")
         return None
     
     client = OpenAI(
@@ -52,7 +53,7 @@ def initialize_client():
 def initialize_embeddings():
     """Initialize LangChain embeddings model"""
     if not github_token:
-        st.error("❌ GitHub token not available for embeddings")
+        st.error("Token de GitHub no disponible para embeddings")
         return None
     
     try:
@@ -62,7 +63,7 @@ def initialize_embeddings():
         )
         return embeddings
     except Exception as e:
-        st.error(f"Error initializing embeddings: {str(e)}")
+        st.error(f"Error inicializando embeddings: {str(e)}")
         return None
 
 def get_embeddings_langchain(embeddings_model, texts):
@@ -78,7 +79,7 @@ def get_embeddings_langchain(embeddings_model, texts):
         embeddings = embeddings_model.embed_documents([doc.page_content for doc in documents])
         return np.array(embeddings)
     except Exception as e:
-        st.error(f"Error getting embeddings: {str(e)}")
+        st.error(f"Error obteniendo embeddings: {str(e)}")
         return None
 
 def get_query_embedding_langchain(embeddings_model, query):
@@ -87,7 +88,7 @@ def get_query_embedding_langchain(embeddings_model, query):
         embedding = embeddings_model.embed_query(query)
         return np.array(embedding)
     except Exception as e:
-        st.error(f"Error getting query embedding: {str(e)}")
+        st.error(f"Error obteniendo embedding de consulta: {str(e)}")
         return None
 
 
@@ -245,7 +246,7 @@ Responde basándote únicamente en el contexto proporcionado."""
         
         return response_text, generation_time
     except Exception as e:
-        return f"Error generating response: {str(e)}", time.time() - start_time
+        return f"Error generando respuesta: {str(e)}", time.time() - start_time
 
 
 def create_evaluation_dataset():
@@ -312,13 +313,12 @@ def export_langsmith_format(logs):
 
 
 def main():
-    st.title("📊 RAG con Evaluación y Monitoreo (LangChain)")
+    st.title("RAG con evaluacion medica")
     st.write("Sistema RAG con métricas detalladas usando LangChain para embeddings")
     
-    # Check if GitHub token is available
     if not github_token:
-        st.error("❌ Please check your .env file and make sure GITHUB_TOKEN is set.")
-        st.info("💡 Your .env file should contain: GITHUB_TOKEN=your_token_here")
+        st.error("Por favor verifica tu archivo .env y asegúrate de que GITHUB_TOKEN esté configurado.")
+        st.info("Tu archivo .env debe contener: GITHUB_TOKEN=tu_token_aqui")
         return
     
     if "eval_rag" not in st.session_state:
@@ -343,7 +343,7 @@ def main():
     
     client = initialize_client()
     if not client:
-        st.error("❌ Failed to initialize OpenAI client")
+        st.error("Error al inicializar el cliente OpenAI")
         return
     
     # Initialize LangChain embeddings model
@@ -353,10 +353,10 @@ def main():
         except Exception as e:
             st.error(f"Error inicializando embeddings: {str(e)}")
     
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(["🔍 Consulta", "📄 Documentos", "📊 Métricas", "🧪 Evaluación", "📈 Analytics"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["Consulta", "Documentos", "Métricas", "Evaluación", "Analytics"])
     
     with tab1:
-        st.header("💬 Consulta con Monitoreo (LangChain)")
+        st.header("Consulta con Monitoreo (LangChain)")
         
         col1, col2 = st.columns([3, 1])
         
@@ -372,7 +372,7 @@ def main():
                 st.session_state.eval_rag['enable_logging'] = st.checkbox("Logging", value=True)
         
         with col2:
-            if st.button("🔄 Generar Embeddings (LangChain)"):
+            if st.button("Generar Embeddings (LangChain)"):
                 if st.session_state.eval_rag['documents'] and st.session_state.eval_rag['embeddings_model']:
                     with st.spinner("Generando embeddings con LangChain..."):
                         embeddings = get_embeddings_langchain(
@@ -381,13 +381,13 @@ def main():
                         )
                         if embeddings is not None:
                             st.session_state.eval_rag['embeddings'] = embeddings
-                            st.success("✅ Embeddings listos con LangChain")
+                            st.success("Embeddings listos con LangChain")
                         else:
-                            st.error("❌ Error generando embeddings")
+                            st.error("Error generando embeddings")
                 else:
                     st.warning("Modelo de embeddings no disponible")
         
-        if st.button("🚀 Consultar con Métricas") and query:
+        if st.button("Consultar con Métricas") and query:
             if st.session_state.eval_rag['embeddings'] is None:
                 st.warning("Genera embeddings primero")
             elif st.session_state.eval_rag['embeddings_model'] is None:
@@ -425,15 +425,15 @@ def main():
                             metrics['relevance'] = evaluate_relevance(client, query, response)
                             metrics['context_precision'] = evaluate_context_precision(client, query, results)
                     
-                    st.subheader("📋 Documentos Recuperados")
+                    st.subheader("Documentos Recuperados")
                     for i, result in enumerate(results):
                         with st.expander(f"Doc {i+1} - Score: {result['combined_score']:.3f}"):
                             st.write(result['document'])
                     
-                    st.subheader("🤖 Respuesta")
+                    st.subheader("Respuesta")
                     st.write(response)
                     
-                    st.subheader("⏱️ Métricas de Rendimiento")
+                    st.subheader("Métricas de Rendimiento")
                     col1, col2, col3, col4 = st.columns(4)
                     with col1:
                         st.metric("Tiempo total", f"{metrics['total_time']:.2f}s")
@@ -445,7 +445,7 @@ def main():
                         st.metric("Docs recuperados", metrics['docs_retrieved'])
                     
                     if eval_enabled:
-                        st.subheader("🎯 Métricas de Calidad")
+                        st.subheader("Métricas de Calidad")
                         col1, col2, col3 = st.columns(3)
                         with col1:
                             st.metric("Fidelidad", f"{metrics['faithfulness']:.1f}/10")
@@ -458,12 +458,12 @@ def main():
                         log_interaction(query, response, metrics, results)
     
     with tab2:
-        st.header("📄 Gestión de Documentos")
+        st.header("Gestión de Documentos")
         
         col1, col2 = st.columns([2, 1])
         
         with col1:
-            st.subheader("📚 Documentos Actuales")
+            st.subheader("Documentos Actuales")
             
             # Display current documents with edit/delete options
             for i, doc in enumerate(st.session_state.eval_rag['documents']):
@@ -479,11 +479,11 @@ def main():
                     
                     col_edit, col_delete = st.columns(2)
                     with col_edit:
-                        if st.button(f"✏️ Editar", key=f"edit_{i}"):
+                        if st.button(f"Editar", key=f"edit_{i}"):
                             st.session_state[f'editing_doc_{i}'] = True
                     
                     with col_delete:
-                        if st.button(f"🗑️ Eliminar", key=f"delete_{i}"):
+                        if st.button(f"Eliminar", key=f"delete_{i}"):
                             st.session_state.eval_rag['documents'].pop(i)
                             # Reset embeddings when documents change
                             st.session_state.eval_rag['embeddings'] = None
@@ -500,7 +500,7 @@ def main():
                         
                         col_save, col_cancel = st.columns(2)
                         with col_save:
-                            if st.button(f"💾 Guardar", key=f"save_{i}"):
+                            if st.button(f"Guardar", key=f"save_{i}"):
                                 st.session_state.eval_rag['documents'][i] = new_content
                                 st.session_state[f'editing_doc_{i}'] = False
                                 # Reset embeddings when documents change
@@ -509,12 +509,12 @@ def main():
                                 st.rerun()
                         
                         with col_cancel:
-                            if st.button(f"❌ Cancelar", key=f"cancel_{i}"):
+                            if st.button(f"Cancelar", key=f"cancel_{i}"):
                                 st.session_state[f'editing_doc_{i}'] = False
                                 st.rerun()
         
         with col2:
-            st.subheader("➕ Agregar Documento")
+            st.subheader("Agregar Nuevo Documento")
             
             new_doc = st.text_area(
                 "Contenido del nuevo documento:",
@@ -522,7 +522,7 @@ def main():
                 placeholder="Escribe aquí el contenido del nuevo documento..."
             )
             
-            if st.button("📝 Agregar Documento"):
+            if st.button("Agregar Documento"):
                 if new_doc.strip():
                     st.session_state.eval_rag['documents'].append(new_doc.strip())
                     # Reset embeddings when documents change
@@ -532,7 +532,7 @@ def main():
                 else:
                     st.warning("El documento no puede estar vacío")
             
-            st.subheader("📊 Estadísticas")
+            st.subheader("Estadísticas")
             st.metric("Total documentos", len(st.session_state.eval_rag['documents']))
             
             if st.session_state.eval_rag['documents']:
@@ -542,9 +542,9 @@ def main():
                 total_words = sum([len(doc.split()) for doc in st.session_state.eval_rag['documents']])
                 st.metric("Total palabras", f"{total_words:,}")
             
-            st.subheader("🔄 Acciones")
+            st.subheader("Acciones")
             
-            if st.button("🗑️ Limpiar Todos"):
+            if st.button("Limpiar Todos"):
                 if st.session_state.eval_rag['documents']:
                     st.session_state.eval_rag['documents'] = []
                     st.session_state.eval_rag['embeddings'] = None
@@ -553,7 +553,7 @@ def main():
             
             # File upload
             uploaded_file = st.file_uploader(
-                "📁 Cargar archivo de texto",
+                "Cargar archivo de texto",
                 type=['txt', 'md'],
                 help="Sube un archivo .txt o .md para agregarlo como documento"
             )
@@ -561,7 +561,7 @@ def main():
             if uploaded_file is not None:
                 try:
                     content = uploaded_file.read().decode('utf-8')
-                    if st.button("📥 Importar Archivo"):
+                    if st.button("Importar Archivo"):
                         st.session_state.eval_rag['documents'].append(content)
                         st.session_state.eval_rag['embeddings'] = None
                         st.success(f"Archivo '{uploaded_file.name}' importado exitosamente")
@@ -570,15 +570,15 @@ def main():
                     st.error(f"Error al leer el archivo: {str(e)}")
             
             # Status of embeddings
-            st.subheader("🔧 Estado")
+            st.subheader("Estado")
             if st.session_state.eval_rag['embeddings'] is not None:
-                st.success("✅ Embeddings generados")
+                st.success("Embeddings generados")
             else:
-                st.warning("⚠️ Embeddings no generados")
+                st.warning("Embeddings no generados")
                 st.info("Genera embeddings después de modificar documentos")
     
     with tab3:
-        st.header("📊 Dashboard de Métricas")
+        st.header("Métricas")
         
         if st.session_state.interaction_logs:
             df = pd.DataFrame([
@@ -594,46 +594,46 @@ def main():
             col1, col2 = st.columns(2)
             
             with col1:
-                st.subheader("Response Time")
-                fig = px.line(df, x='timestamp', y='total_time', title="Total Time per Query")
+                st.subheader("Tiempo de Respuesta")
+                fig = px.line(df, x='timestamp', y='total_time', title="Tiempo Total por Consulta")
                 st.plotly_chart(fig, use_container_width=True)
                 
                 if 'faithfulness' in df.columns:
-                    st.subheader("Faithfulness Distribution")
-                    fig = px.histogram(df, x='faithfulness', title="Faithfulness Scores Distribution")
+                    st.subheader("Distribución de Fidelidad")
+                    fig = px.histogram(df, x='faithfulness', title="Distribución de Puntuaciones de Fidelidad")
                     st.plotly_chart(fig, use_container_width=True)
             
             with col2:
-                st.subheader("Retrieval Metrics")
+                st.subheader("Métricas de Recuperación")
                 fig = px.scatter(df, x='retrieval_time', y='generation_time', 
-                               size='docs_retrieved', title="Retrieval vs Generation Time")
+                               size='docs_retrieved', title="Tiempo de Recuperación vs Generación")
                 st.plotly_chart(fig, use_container_width=True)
                 
                 if 'relevance' in df.columns and 'context_precision' in df.columns:
-                    st.subheader("Quality vs Precision")
+                    st.subheader("Calidad vs Precisión")
                     fig = px.scatter(df, x='context_precision', y='relevance', 
-                                   title="Context Precision vs Relevance")
+                                   title="Precisión del Contexto vs Relevancia")
                     st.plotly_chart(fig, use_container_width=True)
             
-            st.subheader("📈 General Statistics")
+            st.subheader("Estadísticas Generales")
             col1, col2, col3, col4 = st.columns(4)
             with col1:
-                st.metric("Total Queries", len(df))
+                st.metric("Total Consultas", len(df))
             with col2:
-                st.metric("Average Time", f"{df['total_time'].mean():.2f}s")
+                st.metric("Tiempo Promedio", f"{df['total_time'].mean():.2f}s")
             with col3:
                 if 'faithfulness' in df.columns:
-                    st.metric("Average Faithfulness", f"{df['faithfulness'].mean():.1f}/10")
+                    st.metric("Fidelidad Promedio", f"{df['faithfulness'].mean():.1f}/10")
             with col4:
                 if 'relevance' in df.columns:
-                    st.metric("Average Relevance", f"{df['relevance'].mean():.1f}/10")
+                    st.metric("Relevancia Promedio", f"{df['relevance'].mean():.1f}/10")
         else:
             st.info("No hay datos de interacciones aún. Realiza algunas consultas primero.")
     
     with tab4:
-        st.header("🧪 Evaluación Sistemática")
+        st.header("Evaluación Sistemática")
         
-        if st.button("🧪 Ejecutar Evaluación Completa"):
+        if st.button("Ejecutar Evaluación Completa"):
             if st.session_state.eval_rag['embeddings'] is None:
                 st.warning("Genera embeddings primero")
             elif st.session_state.eval_rag['embeddings_model'] is None:
@@ -675,11 +675,11 @@ def main():
                             })
                 
                 if results:
-                    st.subheader("📊 Resultados de Evaluación")
+                    st.subheader("Resultados de Evaluación")
                     eval_df = pd.DataFrame(results)
                     st.dataframe(eval_df)
                     
-                    st.subheader("📈 Métricas Promedio")
+                    st.subheader("Métricas Promedio")
                     col1, col2, col3, col4 = st.columns(4)
                     with col1:
                         st.metric("Fidelidad", f"{eval_df['faithfulness'].mean():.1f}/10")
@@ -693,21 +693,21 @@ def main():
                     st.error("No se pudieron obtener resultados de evaluación")
     
     with tab5:
-        st.header("📈 Analytics y Exportación")
+        st.header("Analytics y Exportación")
         
         col1, col2 = st.columns(2)
         
         with col1:
-            st.subheader("📤 Exportar Datos")
+            st.subheader("Exportar Datos")
             
-            if st.button("📊 Exportar para LangSmith"):
+            if st.button("Exportar para LangSmith"):
                 if st.session_state.interaction_logs:
                     langsmith_data = export_langsmith_format(st.session_state.interaction_logs)
                     st.json(langsmith_data[:2])
                     
                     json_str = json.dumps(langsmith_data, indent=2, ensure_ascii=False)
                     st.download_button(
-                        label="💾 Descargar JSON LangSmith",
+                        label="Descargar JSON LangSmith",
                         data=json_str,
                         file_name=f"langsmith_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
                         mime="application/json"
@@ -715,7 +715,7 @@ def main():
                 else:
                     st.info("No hay datos para exportar")
             
-            if st.button("📊 Exportar CSV"):
+            if st.button("Exportar CSV"):
                 if st.session_state.interaction_logs:
                     df = pd.DataFrame([
                         {
@@ -729,30 +729,30 @@ def main():
                     
                     csv = df.to_csv(index=False)
                     st.download_button(
-                        label="💾 Descargar CSV",
+                        label="Descargar CSV",
                         data=csv,
-                                                file_name=f"rag_metrics_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                        file_name=f"rag_metrics_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
                         mime="text/csv"
                     )
                 else:
                     st.info("No hay datos para exportar")
         
         with col2:
-            st.subheader("📊 Document Insights")
+            st.subheader("Análisis de Documentos")
             
             if st.session_state.eval_rag['documents']:
-                # Document statistics
+                # Estadísticas de documentos
                 doc_lengths = [len(doc) for doc in st.session_state.eval_rag['documents']]
                 
                 fig = px.bar(
                     x=list(range(1, len(doc_lengths) + 1)),
                     y=doc_lengths,
-                    title="Document Length Distribution",
-                    labels={'x': 'Document ID', 'y': 'Characters'}
+                    title="Distribución de Longitud de Documentos",
+                    labels={'x': 'ID Documento', 'y': 'Caracteres'}
                 )
                 st.plotly_chart(fig, use_container_width=True)
                 
-                # Word frequency analysis
+                # Análisis de frecuencia de palabras
                 all_text = " ".join(st.session_state.eval_rag['documents'])
                 words = all_text.lower().split()
                 word_freq = {}
@@ -765,11 +765,11 @@ def main():
                     fig = px.bar(
                         x=[word[0] for word in top_words],
                         y=[word[1] for word in top_words],
-                        title="Top 10 Most Frequent Words"
+                        title="Top 10 Palabras Más Frecuentes"
                     )
                     st.plotly_chart(fig, use_container_width=True)
             else:
-                st.info("No documents available for analysis")
+                st.info("No hay documentos disponibles para análisis")
 
 if __name__ == "__main__":
     main()
