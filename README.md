@@ -1,204 +1,333 @@
-# Eva1_Benjamin_Mella_Ignacio_Mella
+# AI Assistant - Agente Médico Inteligente
 
-## Sistema RAG (Retrieval-Augmented Generation) con Evaluación Médica
+Sistema avanzado de asistencia médica basado en IA que combina Retrieval-Augmented Generation (RAG), agentes inteligentes con herramientas especializadas y memoria conversacional para proporcionar consultas médicas informadas.
 
-Este proyecto implementa un sistema RAG completo con capacidades de evaluación y monitoreo para consultas médicas, utilizando Streamlit, OpenAI GPT-4o, y LangChain.
+## 🎯 Características Principales
 
-### Funcionalidades Principales
+### 🤖 Arquitectura de Agentes (LangChain)
+- **7 herramientas especializadas** para diferentes tipos de consultas médicas
+- **Planificación jerárquica** con análisis diferencial sistemático
+- **Function calling** nativo de OpenAI para selección inteligente de herramientas
+- **Ejecución controlada** con timeout y manejo de errores robusto
 
-#### 1. Sistema RAG Híbrido
-- Combina búsqueda semántica (70%) y por palabras clave (30%)
-- Utiliza embeddings de OpenAI (`text-embedding-3-small`) via LangChain
-- Base de conocimiento médico con 8 documentos sobre condiciones comunes
+### 🧠 Sistema de Memoria Avanzado
+- **ConversationSummaryMemory**: Resúmenes automáticos para conversaciones largas (ahorro de tokens)
+- **ConversationBufferMemory**: Historial completo para sesiones cortas
+- **Contexto persistente**: El agente recuerda consultas previas del paciente
 
-#### 2. Evaluación Automática
-- **Faithfulness**: Evalúa si la respuesta es fiel al contexto (1-10)
-- **Relevance**: Mide qué tan relevante es la respuesta (1-10)
-- **Context Precision**: Calcula precisión de documentos recuperados
+### 📚 Base de Conocimiento Médica (RAG)
+- Procesamiento de documentos PDF médicos
+- **Embeddings** con `text-embedding-3-small` de OpenAI
+- **ChromaDB** como vector store
+- Chunking optimizado con overlap para continuidad de contexto
 
-#### 3. Interfaz Web Completa
-5 pestañas principales:
-- 🔍 **Consulta**: Interfaz para hacer preguntas médicas
-- 📄 **Documentos**: Gestión de base de conocimiento
-- 📊 **Métricas**: Dashboard con visualizaciones
-- 🧪 **Evaluación**: Tests sistemáticos con dataset predefinido
-- 📈 **Analytics**: Exportación de datos y estadísticas
+### 🔒 Sistema de Seguridad
+- **Detector de emergencias** con triaje automático
+- Alertas críticas para síntomas que requieren atención inmediata
+- Validación de interacciones medicamentosas
+- Disclaimers automáticos en cada respuesta
 
-### 🔧 Tecnologías Utilizadas
+### 📊 Evaluación de Calidad
+- **Scoring automático** de respuestas (0-10)
+- Métricas de relevancia con similitud coseno
+- Tracking de herramientas utilizadas
+- Medición de tiempos de respuesta
 
-- **Streamlit**: Framework para la interfaz web
-- **OpenAI GPT-4o**: Modelo de lenguaje para generación y evaluación
-- **LangChain**: Framework para embeddings y manejo de documentos
-- **scikit-learn**: Cálculo de similitud coseno
-- **Plotly**: Visualización de datos interactiva
-- **Pandas/NumPy**: Manipulación y análisis de datos
+### 🎨 Interfaz Web Completa (Streamlit)
+- **3 pestañas**: Chat Médico, Estadísticas, Ayuda
+- Visualización de métricas en tiempo real
+- Historial de conversación con metadata
+- Exportación de estadísticas
 
-### Requisitos
+---
 
+## 🚀 Inicio Rápido
+
+### Requisitos Previos
+- Python 3.9+
+- Token de GitHub con acceso a Azure OpenAI Models
+
+### Instalación
+
+1. **Clonar el repositorio**
 ```bash
-pip install streamlit openai langchain-openai scikit-learn plotly pandas numpy python-dotenv
+git clone <url-del-repo>
+cd Eva1_Benjamin_Mella_Ignacio_Mella
 ```
 
-### Configuración
-
-1. Crear archivo `.env`:
-```env
-GITHUB_TOKEN=your_github_token_here
-GITHUB_BASE_URL=https://models.inference.ai.azure.com
-```
-
-2. Ejecutar la aplicación:
+2. **Crear entorno virtual**
 ```bash
-streamlit run rag.py
+python -m venv venv
+source venv/bin/activate  # En Windows: venv\Scripts\activate
 ```
 
-### Arquitectura del Sistema
+3. **Instalar dependencias**
+```bash
+pip install -r requirements.txt
+```
 
-#### Documentos Médicos Incluidos
-- Diabetes tipo 2
-- Hipertensión arterial
-- Anemia
-- Antibióticos
-- Vacunación
-- Infarto de miocardio
-- Neumonía
-- Depresión
+4. **Configurar variables de entorno**
+```bash
+cp .env_example .env
+# Editar .env con tu GITHUB_TOKEN
+```
 
-### Documentación de Funciones
+5. **Preparar base de conocimiento**
+```bash
+mkdir medical_pdfs
+# Copiar tus documentos médicos en PDF a esta carpeta
+```
 
-#### Inicialización y Configuración
+6. **Ejecutar la aplicación**
+```bash
+streamlit run app_agente_mejorado.py
+```
 
-**`initialize_client()`**
-- Inicializa el cliente OpenAI con token de GitHub
-- Configura la URL base para Azure OpenAI
-- Retorna cliente configurado o None si hay error
+La aplicación estará disponible en `http://localhost:8501`
 
-**`initialize_embeddings()`**
-- Inicializa el modelo de embeddings de LangChain
-- Utiliza `OpenAIEmbeddings` con modelo `text-embedding-3-small`
-- Maneja errores de autenticación y conexión
+---
 
-#### Generación de Embeddings
+## 📁 Estructura del Proyecto
 
-**`get_embeddings_langchain(embeddings_model, texts)`**
-- Convierte lista de textos a embeddings vectoriales
-- Transforma textos a objetos `Document` de LangChain
-- Retorna array NumPy con embeddings o None si hay error
+```
+Eva1_Benjamin_Mella_Ignacio_Mella/
+│
+├── app_agente_mejorado.py          # Interfaz web Streamlit
+├── agente_medico_mejorado.py       # Lógica del agente con LangChain
+├── ARCHITECTURE.md                  # Documentación detallada de arquitectura
+├── README.md                        # Este archivo
+├── .env_example                     # Plantilla de configuración
+├── .gitignore                       # Archivos ignorados por Git
+├── requirements.txt                 # Dependencias del proyecto
+│
+└── medical_pdfs/                    # Base de conocimiento (no incluida)
+    ├── diabetes.pdf
+    ├── hipertension.pdf
+    └── ...
+```
 
-**`get_query_embedding_langchain(embeddings_model, query)`**
-- Genera embedding para una consulta específica
-- Optimizado para búsqueda semántica
-- Maneja excepciones y retorna vector de consulta
+---
 
-#### Sistema de Búsqueda
+## 🛠️ Tecnologías Utilizadas
 
-**`hybrid_search_with_metrics(query, documents, embeddings, embeddings_model, client, top_k=5)`**
-- Implementa búsqueda híbrida: semántica (70%) + palabras clave (30%)
-- Calcula similitud coseno para búsqueda semántica
-- Implementa scoring por intersección de palabras
-- Retorna documentos rankeados con scores y tiempo de recuperación
+### Core
+- **Python 3.9+**: Lenguaje principal
+- **Streamlit**: Framework para interfaz web
+- **LangChain**: Framework para agentes y RAG
+- **OpenAI GPT-4o-mini**: Modelo de lenguaje
 
-#### Generación de Respuestas
+### LangChain Components
+- `langchain-openai`: Integración con OpenAI
+- `langchain-chroma`: Vector store
+- `langchain-community`: Cargadores de documentos
+- `langchain-text-splitters`: Procesamiento de texto
 
-**`generate_response_with_metrics(client, query, context_docs)`**
-- Genera respuestas usando GPT-4o basándose en contexto recuperado
-- Combina múltiples documentos como contexto unificado
-- Mide tiempo de generación y maneja errores
-- Retorna respuesta y métricas de tiempo
+### Utilidades
+- `python-dotenv`: Gestión de variables de entorno
+- `PyPDF`: Procesamiento de documentos PDF
 
-#### Sistema de Evaluación
+---
 
-**`evaluate_faithfulness(client, query, context, response)`**
-- Evalúa si la respuesta es fiel al contexto proporcionado
-- Utiliza GPT-4o como evaluador automático
-- Escala 1-10 donde 7-10 indica alta fidelidad
-- Prompt especializado para evaluación médica
+## 🧩 Componentes Principales
 
-**`evaluate_relevance(client, query, response)`**
-- Mide qué tan relevante es la respuesta para la consulta
-- Evaluación automática con GPT-4o
-- Escala 1-10 para relevancia de contenido médico
-- Considera utilidad práctica de la respuesta
+### 1. Herramientas Médicas Especializadas
 
-**`evaluate_context_precision(client, query, retrieved_docs)`**
-- Calcula precisión de documentos recuperados
-- Evalúa cuántos documentos son realmente relevantes
-- Retorna ratio de documentos útiles vs total recuperado
-- Utiliza evaluación automática por documento
+#### `BuscarSintomas`
+Busca información sobre síntomas y manifestaciones clínicas de enfermedades.
 
-#### Dataset de Evaluación
+**Ejemplo de uso:**
+```python
+"¿Cuáles son los síntomas de la diabetes tipo 2?"
+```
 
-**`create_evaluation_dataset()`**
-- Define conjunto de pruebas médicas predefinidas
-- 5 casos de prueba sobre condiciones comunes
-- Estructura: query, expected_context, ground_truth
-- Implementa few-shot prompting para evaluación
+#### `BuscarTratamientos`
+Recupera opciones terapéuticas para condiciones médicas.
 
-#### Logging y Exportación
+**Ejemplo de uso:**
+```python
+"¿Qué tratamientos existen para la hipertensión arterial?"
+```
 
-**`log_interaction(query, response, metrics, context_docs)`**
-- Registra interacciones del usuario con timestamps
-- Almacena métricas completas de rendimiento
-- Genera IDs únicos para tracking
-- Mantiene historial en sesión de Streamlit
+#### `BuscarMedicamentos`
+Proporciona información detallada sobre medicamentos específicos.
 
-**`export_langsmith_format(logs)`**
-- Convierte logs a formato compatible con LangSmith
-- Estructura datos para análisis externo
-- Incluye inputs, outputs, métricas y metadata
-- Facilita integración con herramientas de MLOps
+**Ejemplo de uso:**
+```python
+"¿Para qué sirve la metformina y qué efectos secundarios tiene?"
+```
 
-#### Función Principal
+#### `AnalisisDiferencial`
+Realiza diagnóstico diferencial sistemático basado en síntomas.
 
-**`main()`**
-- Punto de entrada de la aplicación Streamlit
-- Gestiona estado de sesión y configuración
-- Implementa interfaz de 5 pestañas
-- Maneja flujo completo: consulta → búsqueda → generación → evaluación
+**Ejemplo de uso:**
+```python
+"Tengo fiebre, tos seca y fatiga. ¿Qué diagnósticos debo considerar?"
+```
 
-### Métricas Monitoreadas
+#### `ValidarInteracciones`
+Verifica interacciones entre múltiples medicamentos.
 
-#### Rendimiento
-- Tiempo de recuperación de documentos
-- Tiempo de generación de respuestas
-- Tiempo total de procesamiento
-- Número de documentos recuperados
+**Ejemplo de uso:**
+```python
+"Tomo warfarina y aspirina, ¿hay alguna interacción?"
+```
 
-#### Calidad
-- Faithfulness (fidelidad al contexto)
-- Relevance (relevancia de la respuesta)
-- Context Precision (precisión del contexto)
-- Score promedio de relevancia
+#### `DetectarEmergencia`
+Sistema de triaje que identifica síntomas críticos.
 
-### Flujo de Trabajo
+**Ejemplo de uso:**
+```python
+"Tengo dolor en el pecho y dificultad para respirar"
+# → ALERTA DE EMERGENCIA
+```
 
-1. **Carga inicial**: Documentos médicos predefinidos
-2. **Generación de embeddings**: Vectorización con LangChain
-3. **Consulta del usuario**: Pregunta médica
-4. **Búsqueda híbrida**: Recuperación de documentos relevantes
-5. **Generación**: Respuesta basada en contexto
-6. **Evaluación**: Métricas automáticas de calidad
-7. **Logging**: Registro para análisis posterior
+#### `EvaluarRelevancia`
+Evalúa la calidad de información recuperada de la base de conocimiento.
 
-### Visualizaciones Disponibles
+---
 
-- Distribución de tiempos de respuesta
-- Histogramas de scores de fidelidad
-- Scatter plots de métricas de calidad
-- Estadísticas generales del sistema
-- Análisis de longitud de documentos
+### 2. Sistema de Memoria
 
-### Casos de Uso
+**ConversationSummaryMemory** (Recomendado)
+- Genera resúmenes automáticos de conversaciones largas
+- Ahorra tokens manteniendo contexto esencial
+- Ideal para consultas médicas con múltiples seguimientos
 
-- Consultas médicas básicas
-- Evaluación de sistemas RAG médicos
-- Análisis de rendimiento de embeddings
-- Benchmarking de modelos de lenguaje
-- Investigación en IA médica
+**ConversationBufferMemory**
+- Almacena historial completo
+- Mayor consumo de tokens
+- Útil para sesiones cortas
 
-### Consideraciones de Seguridad
+---
 
-- Tokens de API manejados via variables de entorno
-- Validación de inputs del usuario
-- Manejo seguro de errores y excepciones
-- Logs sin información sensible
+### 3. Evaluación de Calidad
+
+Cada respuesta es evaluada con múltiples criterios:
+
+| Criterio | Peso | Descripción |
+|----------|------|-------------|
+| Uso de herramientas | +2 pts | Utilizó búsqueda en base de conocimiento |
+| Detalle de respuesta | +1 pt | Respuesta > 200 caracteres |
+| Citas de fuentes | +1 pt | Menciona documentos/páginas |
+| Precauciones | +1 pt | Incluye disclaimers médicos |
+
+**Score final: 0-10**
+
+---
+
+## 📊 Métricas Monitoreadas
+
+### Rendimiento
+- ⏱️ **Tiempo de respuesta**: Velocidad de procesamiento
+- 🔧 **Herramientas usadas**: Número de búsquedas realizadas
+- 📈 **Consultas totales**: Contador de sesión
+
+### Calidad
+- ⭐ **Score de calidad**: Evaluación automática (0-10)
+- 🎯 **Relevancia**: Similitud coseno con consulta
+- 📚 **Cobertura**: Documentos utilizados
+
+---
+
+##  Uso de la Interfaz Web
+
+### Pestaña 1: Chat Médico
+
+1. **Inicializar agente** (barra lateral):
+   - Configurar directorio de PDFs
+   - Seleccionar modelo LLM
+   - Activar/desactivar memoria con resumen
+   - Hacer clic en "Inicializar Agente"
+
+2. **Realizar consulta**:
+   - Escribir pregunta médica en el área de texto
+   - Hacer clic en "Enviar"
+   - Ver respuesta con métricas
+
+3. **Seguimiento**:
+   - El agente recuerda conversaciones previas
+   - Puedes hacer preguntas de contexto sin repetir información
+
+### Pestaña 2: Estadísticas
+
+- Visualiza métricas acumuladas
+- Gráfico de evolución de calidad
+- Estado de la memoria
+- Estadísticas del modelo
+
+### Pestaña 3: Ayuda
+
+- Guía completa de uso
+- Tipos de consultas soportadas
+- Información técnica
+- Ejemplos de preguntas
+
+---
+
+## Casos de Uso
+
+### Consulta Básica
+```
+Usuario: "Tengo sed excesiva y orino mucho, ¿qué podría ser?"
+
+Agente:
+1. Ejecuta DetectarEmergencia (no crítico)
+2. Usa BuscarSintomas("poliuria polidipsia")
+3. Genera respuesta basada en contexto
+4. Incluye disclaimer médico
+
+Respuesta: "Los síntomas que describes (poliuria y polidipsia) 
+son característicos de la diabetes mellitus. [Más detalles...]
+Es importante que consultes con un médico para confirmar..."
+```
+
+### Análisis Diferencial
+```
+Usuario: "Tengo fiebre, tos, dolor de cabeza y fatiga"
+
+Agente:
+1. Ejecuta DetectarEmergencia
+2. Usa AnalisisDiferencial(síntomas)
+3. Estructura respuesta jerárquica:
+   - Nivel 1: Síndrome respiratorio febril
+   - Nivel 2: Diagnósticos posibles (COVID-19, gripe, neumonía)
+   - Nivel 3: Exámenes recomendados
+```
+
+### Validación de Medicamentos
+```
+Usuario: "Tomo warfarina y quiero tomar ibuprofeno"
+
+Agente:
+1. Usa BuscarMedicamentos("warfarina")
+2. Usa BuscarMedicamentos("ibuprofeno")
+3. Ejecuta ValidarInteracciones("warfarina, ibuprofeno")
+4. ALERTA: Interacción GRAVE detectada
+5. Recomienda alternativas
+```
+
+---
+
+
+## 🧪 Evaluación y Testing
+
+### Dataset de Evaluación Incluido
+El archivo [`agente_medico_mejorado.py`](agente_medico_mejorado.py) incluye un script de ejemplo:
+
+```python
+python agente_medico_mejorado.py
+```
+
+Esto ejecutará:
+- Inicialización del agente
+- 2 consultas de ejemplo
+- Evaluación de calidad
+- Estadísticas de rendimiento
+
+
+Creado por:
+- **Ignacio Mella**
+- **Benjamín Mella**
+
+---
+Para documentación técnica un poco mas detallada [`Arquitectura.md`](Arquitectura.md)
