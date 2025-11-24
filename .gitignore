@@ -3,5 +3,6 @@ env/
 venv/
 .venv/
 
+
 # Archivos de entorno / configuración local
 .env

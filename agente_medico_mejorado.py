@@ -3,6 +3,11 @@ import json
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 from dotenv import load_dotenv
+import logging
+import json
+import hashlib
+from functools import lru_cache
+import re
 
 # LangChain - Core
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
@@ -10,20 +15,36 @@ from langchain_chroma import Chroma
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import PyPDFDirectoryLoader
 
-# LangChain - Agentes y Herramientas (IL2.1)
+# LangChain - Agentes y Herramientas 
 from langchain_classic.agents import create_openai_functions_agent, AgentExecutor
 from langchain_classic.tools import Tool
 from langchain_classic import hub
 
-# LangChain - Memoria Avanzada (IL2.2)
+# LangChain - Memoria Avanzada 
 from langchain_classic.memory import ConversationSummaryMemory, ConversationBufferMemory  
 from langchain_core.documents import Document  
 
 
 # Utilidades
 from math import sqrt
+import sys
 
 load_dotenv()
+
+# ═══════════════════════════════════════════════════════════════
+# IL3.1 - CONFIGURACIÓN DE OBSERVABILIDAD (Logging Estructurado)
+# ═══════════════════════════════════════════════════════════════
+
+# Configurar logger con formato JSON estructurado
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('medical_agent.log'),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger('MedicalAgent')
 
 # ═══════════════════════════════════════════════════════════════
 # CONFIGURACIÓN DE API - GITHUB MODELS
@@ -78,6 +99,15 @@ class MedicalAgentImproved:
         "confusión súbita", "desorientación aguda"
     ]
     
+    # Palabras prohibidas
+    PROHIBITED_KEYWORDS = [
+        "hackear", "falsificar", "engañar", "fraude",
+        "certificado falso", "receta falsa"
+    ]
+    
+    # Disclaimer médico 
+    MEDICAL_DISCLAIMER = "\n\n⚠️ **AVISO IMPORTANTE**: Esta información es solo educativa y NO reemplaza la consulta con un profesional médico. Ante cualquier duda o síntoma preocupante, consulta con tu médico."
+    
     def __init__(
         self,
         pdf_directory: str,
@@ -93,15 +123,36 @@ class MedicalAgentImproved:
         self.consultation_count = 0
         self.quality_scores = []
         
+        # Métricas de rendimiento
+        self.metrics = {
+            "consultas_totales": 0,
+            "tiempo_total": 0,
+            "errores": 0,
+            "uso_herramientas": {},
+            "alertas_emergencia": 0,
+            "validaciones_seguridad": 0,
+            "tiempos_respuesta": []  # Para detectar anomalías
+        }
+        
+        # Historial de decisiones
+        self.trace_history = []
+        self.current_trace = []
+        
+        # Cache de búsquedas
+        self.search_cache = {}
+        self.token_usage = {"total": 0, "by_operation": {}}
+        
+        logger.info("Inicializando MedicalAgentImproved con RA3 integrado")
+        
         # ═══════════════════════════════════════════════════
         # CONFIGURACIÓN DEL LLM
         # ═══════════════════════════════════════════════════
         print("\n[1/5] Configurando modelo de lenguaje...")
         self.llm = ChatOpenAI(
             model=model,
-            temperature=0.1,  # Baja temperatura = precisión médica
-            base_url=github_base_url,  # AGREGAR ESTO
-            api_key=github_token,       # AGREGAR ESTO
+            temperature=0.1,  
+            base_url=github_base_url,  
+            api_key=github_token,       
             model_kwargs={"top_p": 0.9}
         )
         print(f"Modelo: {model} (temp=0.1)")
@@ -114,7 +165,7 @@ class MedicalAgentImproved:
         self.embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
         
         # ═══════════════════════════════════════════════════
-        # MEMORIA AVANZADA (IL2.2)
+        # MEMORIA AVANZADA 
         # ═══════════════════════════════════════════════════
         print("\n[3/5] Configurando sistema de memoria...")
         if use_summary_memory:
@@ -138,14 +189,14 @@ class MedicalAgentImproved:
             print("Tipo: ConversationBufferMemory (historial completo)")
         
         # ═══════════════════════════════════════════════════
-        # HERRAMIENTAS ESPECIALIZADAS (IL2.1)
+        # HERRAMIENTAS ESPECIALIZADAS 
         # ═══════════════════════════════════════════════════
         print("\n🔧 [4/5] Creando herramientas médicas especializadas...")
         tools = self._create_advanced_medical_tools()
         print(f"{len(tools)} herramientas especializadas activas")
         
         # ═══════════════════════════════════════════════════
-        # AGENTE CON PLANIFICACIÓN (IL2.3)
+        # AGENTE CON PLANIFICACIÓN 
         # ═══════════════════════════════════════════════════
         print("\n[5/5] Ensamblando agente con capacidades avanzadas...")
         
@@ -175,8 +226,123 @@ class MedicalAgentImproved:
         )
         
         print("\n═══════════════════════════════════════════════════")
-        print("Sistema médico inteligente listo")
+        print("✅ Sistema médico inteligente listo ✅")
         print("═══════════════════════════════════════════════════\n")
+    
+    # ═══════════════════════════════════════════════════════════
+    # TRAZABILIDAD: Tracking de decisiones
+    # ═══════════════════════════════════════════════════════════
+    
+    def _track_step(self, step_type: str, input_data: str, output: str, tool_used: str = None):
+        """Registra cada paso del razonamiento del agente"""
+        trace_entry = {
+            "timestamp": datetime.now().isoformat(),
+            "step_type": step_type,  # "retrieval", "reasoning", "tool_call", "validation"
+            "input": input_data[:200],  # Limitar tamaño
+            "output": output[:200] if output else "",
+            "tool": tool_used
+        }
+        self.current_trace.append(trace_entry)
+        logger.debug(f"Trace step: {step_type} - Tool: {tool_used}")
+    
+    def _get_decision_tree(self) -> Dict:
+        """Genera árbol de decisión de la última consulta"""
+        return {
+            "total_steps": len(self.current_trace),
+            "tools_used": [t["tool"] for t in self.current_trace if t["tool"]],
+            "flow": self.current_trace
+        }
+    
+    # ═══════════════════════════════════════════════════════════
+    # SEGURIDAD Y ÉTICA: Validación y sanitización
+    # ═══════════════════════════════════════════════════════════
+    
+    def _validate_input(self, question: str) -> Tuple[bool, str]:
+        """Valida que la pregunta sea apropiada y segura"""
+        self.metrics["validaciones_seguridad"] += 1
+        
+        # Detectar palabras prohibidas
+        question_lower = question.lower()
+        for keyword in self.PROHIBITED_KEYWORDS:
+            if keyword in question_lower:
+                logger.warning(f"Input rechazado por palabra prohibida: {keyword}")
+                return False, f"❌ Solicitud no permitida. Este sistema es solo para consultas médicas educativas."
+        
+        # Detectar patrones de datos sensibles 
+        if re.search(r'\b\d{16}\b', question):  # Posible número de tarjeta
+            logger.warning("Input rechazado por datos sensibles detectados")
+            return False, "❌ Por seguridad, no compartas números de tarjetas u otros datos financieros."
+        
+        # Validar longitud razonable
+        if len(question) > 2000:
+            return False, "❌ La consulta es demasiado larga. Por favor, sé más conciso."
+        
+        if len(question.strip()) < 5:
+            return False, "❌ La consulta es demasiado corta. Por favor, proporciona más detalles."
+        
+        self._track_step("validation", question, "Input válido", "SecurityValidator")
+        return True, "OK"
+    
+    def _sanitize_response(self, response: str) -> str:
+        """Filtra y mejora la respuesta con consideraciones éticas"""
+        # Reemplazar lenguaje de certeza médica
+        response = response.replace("es definitivamente", "podría ser")
+        response = response.replace("tienes", "podrías tener")
+        response = response.replace("sufres de", "podrías estar experimentando")
+        response = response.replace("diagnóstico: ", "posible diagnóstico: ")
+        
+        # Agregar disclaimer si no existe
+        if "AVISO IMPORTANTE" not in response and "⚠️" not in response:
+            response += self.MEDICAL_DISCLAIMER
+        
+        self._track_step("sanitization", "raw_response", "sanitized_response", "EthicsFilter")
+        return response
+    
+    # ═══════════════════════════════════════════════════════════
+    # ESCALABILIDAD: Caching y optimización
+    # ═══════════════════════════════════════════════════════════
+    
+    def _get_cache_key(self, query: str, search_type: str) -> str:
+        """Genera clave única para cache"""
+        content = f"{query}_{search_type}".lower().strip()
+        return hashlib.md5(content.encode()).hexdigest()
+    
+    def _cached_search(self, query: str, search_type: str, k: int = 4) -> List:
+        """Búsqueda con cache para reducir costos"""
+        cache_key = self._get_cache_key(query, search_type)
+        
+        # Verificar cache
+        if cache_key in self.search_cache:
+            logger.info(f"Cache HIT para {search_type}: {query[:50]}")
+            self._track_step("retrieval", query, "Cache hit", f"CachedSearch_{search_type}")
+            return self.search_cache[cache_key]
+        
+        # Realizar búsqueda real
+        logger.info(f"Cache MISS para {search_type}: {query[:50]}")
+        search_query = f"{search_type} {query}"
+        docs = self.vectorstore.similarity_search(search_query, k=k)
+        
+        # Guardar en cache (limitar a 100 entradas)
+        if len(self.search_cache) > 100:
+            # Eliminar entrada más antigua (FIFO simple)
+            self.search_cache.pop(next(iter(self.search_cache)))
+        
+        self.search_cache[cache_key] = docs
+        self._track_step("retrieval", query, f"{len(docs)} docs found", f"VectorSearch_{search_type}")
+        return docs
+    
+    def _estimate_tokens(self, text: str) -> int:
+        """Estimación aproximada de tokens (1 token ≈ 4 caracteres)"""
+        return len(text) // 4
+    
+    def _log_token_usage(self, operation: str, text: str):
+        """Registra uso de tokens por operación"""
+        tokens = self._estimate_tokens(text)
+        self.token_usage["total"] += tokens
+        
+        if operation not in self.token_usage["by_operation"]:
+            self.token_usage["by_operation"][operation] = 0
+        self.token_usage["by_operation"][operation] += tokens
     
     def _create_system_prompt(self) -> str:
         """Crea el prompt del sistema con instrucciones avanzadas"""
@@ -267,15 +433,33 @@ Recuerda: La calidad de tu respuesta depende de usar las herramientas correctas.
         splits = text_splitter.split_documents(documents)
         print(f"Fragmentos: {len(splits)} chunks procesados")
         
-        # Crear vectorstore con embeddings
+        # Crear embeddings
         embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
+        
+        # Procesar en LOTES para evitar exceder límite de tokens
+        BATCH_SIZE = 100  # Procesar 100 chunks a la vez
+        
+        print(f"Creando vectorstore en lotes de {BATCH_SIZE} chunks...")
+        
+        # Crear vectorstore con el primer lote
+        first_batch = splits[:BATCH_SIZE]
         vectorstore = Chroma.from_documents(
-            documents=splits,
+            documents=first_batch,
             embedding=embeddings,
             collection_name="medical_knowledge_improved"
         )
         
-        print(f"Vectorstore: Base de conocimiento indexada")
+        print(f"   Lote 1/{(len(splits) // BATCH_SIZE) + 1} procesado ({len(first_batch)} chunks)")
+        
+        # Agregar los lotes restantes
+        for i in range(BATCH_SIZE, len(splits), BATCH_SIZE):
+            batch = splits[i:i + BATCH_SIZE]
+            vectorstore.add_documents(batch)
+            batch_num = (i // BATCH_SIZE) + 1
+            total_batches = (len(splits) // BATCH_SIZE) + 1
+            print(f"   Lote {batch_num}/{total_batches} procesado ({len(batch)} chunks)")
+        
+        print(f"Vectorstore: Base de conocimiento indexada completamente")
         
         return vectorstore
     
@@ -333,7 +517,7 @@ Recuerda: La calidad de tu respuesta depende de usar las herramientas correctas.
             ),
             
             # ═══════════════════════════════════════════════
-            # HERRAMIENTAS DE ANÁLISIS AVANZADO (IL2.3)
+            # HERRAMIENTAS DE ANÁLISIS AVANZADO 
             # ═══════════════════════════════════════════════
             Tool(
                 name="AnalisisDiferencial",
@@ -415,8 +599,13 @@ Recuerda: La calidad de tu respuesta depende de usar las herramientas correctas.
     
     def _search_symptoms(self, query: str) -> str:
         """Busca síntomas en la base de conocimiento con evaluación de calidad"""
-        search_query = f"síntomas signos manifestaciones clínicas de {query}"
-        docs = self.vectorstore.similarity_search(search_query, k=4)
+        # Usar búsqueda con cache
+        docs = self._cached_search(query, "síntomas signos manifestaciones clínicas de", k=4)
+        
+        # Registrar uso de herramienta
+        if "BuscarSintomas" not in self.metrics["uso_herramientas"]:
+            self.metrics["uso_herramientas"]["BuscarSintomas"] = 0
+        self.metrics["uso_herramientas"]["BuscarSintomas"] += 1
         
         if not docs:
             return f"No se encontró información sobre síntomas de '{query}' en la base de conocimiento."
@@ -437,8 +626,16 @@ Recuerda: La calidad de tu respuesta depende de usar las herramientas correctas.
     
     def _search_treatments(self, query: str) -> str:
         """Busca tratamientos médicos"""
-        search_query = f"tratamiento terapia manejo clínico de {query}"
-        docs = self.vectorstore.similarity_search(search_query, k=4)
+        # IL3.4 - Usar búsqueda con cache
+        docs = self._cached_search(query, "tratamiento terapia manejo clínico de", k=4)
+        
+        # IL3.1 - Registrar uso de herramienta
+        if "BuscarTratamientos" not in self.metrics["uso_herramientas"]:
+            self.metrics["uso_herramientas"]["BuscarTratamientos"] = 0
+        self.metrics["uso_herramientas"]["BuscarTratamientos"] += 1
+        if "BuscarTratamientos" not in self.metrics["uso_herramientas"]:
+            self.metrics["uso_herramientas"]["BuscarTratamientos"] = 0
+        self.metrics["uso_herramientas"]["BuscarTratamientos"] += 1
         
         if not docs:
             return f"No se encontró información sobre tratamientos para '{query}'."
@@ -458,8 +655,13 @@ Recuerda: La calidad de tu respuesta depende de usar las herramientas correctas.
     
     def _search_medications(self, query: str) -> str:
         """Busca información detallada de medicamentos"""
-        search_query = f"medicamento fármaco {query} dosis efectos secundarios contraindicaciones"
-        docs = self.vectorstore.similarity_search(search_query, k=3)
+        # IL3.4 - Usar búsqueda con cache
+        docs = self._cached_search(query, "medicamento fármaco dosis efectos secundarios contraindicaciones", k=3)
+        
+        # IL3.1 - Registrar uso de herramienta
+        if "BuscarMedicamentos" not in self.metrics["uso_herramientas"]:
+            self.metrics["uso_herramientas"]["BuscarMedicamentos"] = 0
+        self.metrics["uso_herramientas"]["BuscarMedicamentos"] += 1
         
         if not docs:
             return f"No se encontró información sobre el medicamento '{query}'."
@@ -570,6 +772,11 @@ Si no tienes información específica, indícalo claramente y sugiere consultar 
         """
         Detecta síntomas de emergencia - SISTEMA DE TRIAJE
         """
+        # Registrar uso de herramienta
+        if "DetectarEmergencia" not in self.metrics["uso_herramientas"]:
+            self.metrics["uso_herramientas"]["DetectarEmergencia"] = 0
+        self.metrics["uso_herramientas"]["DetectarEmergencia"] += 1
+        
         symptoms_lower = symptoms.lower()
         
         # Buscar síntomas críticos
@@ -579,6 +786,10 @@ Si no tienes información específica, indícalo claramente y sugiere consultar 
                 critical_found.append(critical)
         
         if critical_found:
+            # Registrar alerta de emergencia
+            self.metrics["alertas_emergencia"] += 1
+            logger.warning(f"🚨 EMERGENCIA DETECTADA: {critical_found}")
+            
             alert = "="*60 + "\n"
             alert += "   ¡¡¡ ALERTA DE EMERGENCIA MÉDICA !!!\n"
             alert += "="*64 + "\n\n"
@@ -679,10 +890,112 @@ Justifica brevemente tu clasificación."""
             return 5.0  # Score neutral si hay error
     
     # ═══════════════════════════════════════════════════════════
-    # INTERFAZ PRINCIPAL
+    # INTERFAZ PRINCIPAL 
     # ═══════════════════════════════════════════════════════════
     
     def consult(self, question: str) -> Dict:
+        """Procesa consulta médica con observabilidad, seguridad y trazabilidad completa"""
+        start_time = datetime.now()
+        self.current_trace = []  # Resetear trace para nueva consulta
+        
+        # OBSERVABILIDAD: Logging estructurado
+        logger.info(f"Nueva consulta recibida: {question[:100]}...")
+        self.metrics["consultas_totales"] += 1
+        self.consultation_count += 1  # Mantener sincronizado
+        self.consultation_count += 1  # Mantener sincronizado
+        
+        # SEGURIDAD: Validar entrada
+        is_valid, validation_msg = self._validate_input(question)
+        if not is_valid:
+            logger.warning(f"Consulta rechazada: {validation_msg}")
+            self.metrics["errores"] += 1
+            return {
+                "respuesta": validation_msg,
+                "estado": "rechazado",
+                "tiempo_respuesta": "0s",
+                "calidad": 0,
+                "herramientas_usadas": 0,
+                "trace": self._get_decision_tree()
+            }
+        
+        # ESCALABILIDAD: Log de tokens
+        self._log_token_usage("input", question)
+        
+        try:
+            # Procesar con el agente
+            self._track_step("reasoning", question, "Iniciando procesamiento", "AgentExecutor")
+            resultado = self.agent_executor.invoke({"input": question})
+            
+            respuesta = resultado.get("output", "Lo siento, no pude procesar tu consulta.")
+            intermediate_steps = resultado.get("intermediate_steps", [])
+            
+            # SEGURIDAD: Sanitizar respuesta
+            respuesta = self._sanitize_response(respuesta)
+            
+            # ESCALABILIDAD: Log de tokens de salida
+            self._log_token_usage("output", respuesta)
+            
+            # Calcular métricas
+            tiempo_respuesta = (datetime.now() - start_time).total_seconds()
+            self.metrics["tiempo_total"] += tiempo_respuesta
+            self.metrics["tiempos_respuesta"].append(tiempo_respuesta)  # Para detección de anomalías
+            
+            calidad = self._evaluate_response_quality(question, respuesta, intermediate_steps)
+            self.quality_scores.append(calidad)
+            
+            herramientas_usadas = len(intermediate_steps)
+            
+            # TRAZABILIDAD: Guardar trace completo
+            self.trace_history.append({
+                "consulta": question,
+                "timestamp": start_time.isoformat(),
+                "trace": self.current_trace.copy(),
+                "calidad": calidad
+            })
+            
+            # OBSERVABILIDAD: Log estructurado completo
+            log_entry = {
+                "timestamp": start_time.isoformat(),
+                "question_length": len(question),
+                "response_length": len(respuesta),
+                "tiempo_respuesta": tiempo_respuesta,
+                "calidad": calidad,
+                "herramientas_usadas": herramientas_usadas,
+                "tools": [step[0].tool for step in intermediate_steps],
+                "estado": "exitoso",
+                "tokens_estimados": self._estimate_tokens(question + respuesta)
+            }
+            logger.info(f"Consulta completada: {json.dumps(log_entry)}")
+            
+            return {
+                "respuesta": respuesta,
+                "tiempo_respuesta": f"{tiempo_respuesta:.2f}s",
+                "calidad": round(calidad, 1),
+                "herramientas_usadas": herramientas_usadas,
+                "estado": "exitoso",
+                "trace": self._get_decision_tree(),  # Árbol de decisión
+                "tokens_estimados": self._estimate_tokens(question + respuesta)  
+            }
+            
+        except Exception as e:
+            # OBSERVABILIDAD: Log de errores
+            logger.error(f"Error en consulta: {str(e)}", exc_info=True)
+            self.metrics["errores"] += 1
+            
+            error_time = (datetime.now() - start_time).total_seconds()
+            
+            return {
+                "respuesta": f"❌ Error al procesar la consulta: {str(e)}\n\nPor favor, intenta reformular tu pregunta.",
+                "tiempo_respuesta": f"{error_time:.2f}s",
+                "calidad": 0,
+                "herramientas_usadas": 0,
+                "estado": "error",
+                "trace": self._get_decision_tree(),
+                "error": str(e)
+            }
+    
+    # Mantener método original como fallback
+    def _consult_original(self, question: str) -> Dict:
         """
         Realiza una consulta al agente médico
         
@@ -777,15 +1090,149 @@ Justifica brevemente tu clasificación."""
             return "Memoria no disponible"
     
     def get_statistics(self) -> Dict:
-        """Obtiene estadísticas del agente"""
+        """Retorna estadísticas de uso con métricas de RA3 completas (IE1, IE2, IE4)"""
         avg_quality = sum(self.quality_scores) / len(self.quality_scores) if self.quality_scores else 0
+        consultas = self.metrics["consultas_totales"]
+        avg_time = self.metrics["tiempo_total"] / consultas if consultas > 0 else 0
+        
+        # Obtener estadísticas de memoria/contexto
+        memory_stats = self._get_memory_stats()
+        
+        # Detectar anomalías
+        anomaly_report = self.get_anomalies_report()
+        
+        base_stats = {
+            "total_consultas": consultas,
+            "calidad_promedio": f"{avg_quality:.1f}/10",
+            "tipo_memoria": memory_stats["tipo_memoria"],
+            "modelo": self.llm.model_name,
+            # OBSERVABILIDAD
+            "tiempo_promedio": f"{avg_time:.2f}s",
+            "errores": self.metrics["errores"],
+            "tasa_exito": f"{((consultas - self.metrics['errores']) / max(1, consultas) * 100):.1f}%",
+            "herramientas_mas_usadas": dict(sorted(self.metrics["uso_herramientas"].items(), key=lambda x: x[1], reverse=True)[:3]),
+            "alertas_emergencia": self.metrics["alertas_emergencia"],
+            # MÉTRICAS DE MEMORIA Y CONTEXTO 
+            "memoria_tamano_kb": memory_stats["tamano_memoria_kb"],
+            "memoria_elementos": memory_stats["elementos_en_memoria"],
+            "memoria_eficiencia": memory_stats["memoria_eficiencia"],
+            # ESCALABILIDAD
+            "cache_size": len(self.search_cache),
+            "tokens_totales": self.token_usage["total"],
+            "tokens_por_consulta": self.token_usage["total"] // max(1, consultas),
+            "costo_estimado_usd": f"${(self.token_usage['total'] * 0.00015 / 1000):.4f}",
+            # DETECCIÓN DE ANOMALÍAS 
+            "anomalias_detectadas": anomaly_report["anomalias_detectadas"],
+            "estado_sistema": anomaly_report["estado_sistema"],
+            "anomalias": anomaly_report["anomalias"],
+            "recomendaciones": anomaly_report["recomendaciones"]
+        }
+        
+        return base_stats
+    
+    def get_trace_history(self, last_n: int = 5) -> List[Dict]:
+        """IL3.2 - Retorna historial de trazabilidad de las últimas consultas"""
+        return self.trace_history[-last_n:] if self.trace_history else []
+    
+    def _detect_anomalies(self) -> List[str]:
+        """IL3.1/IL3.4 - Detecta patrones anómalos en las métricas del sistema"""
+        anomalies = []
+        consultas = self.metrics["consultas_totales"]
+        
+        if consultas == 0:
+            return anomalies
+        
+        # Calcular estadísticas
+        avg_time = self.metrics["tiempo_total"] / consultas
+        error_rate = self.metrics["errores"] / consultas
+        tiempos = self.metrics.get("tiempos_respuesta", [])
+        
+        # ANOMALÍA 1: Latencia alta (tiempo promedio > 10 segundos)
+        if avg_time > 10:
+            anomalies.append(f"⚠️ Latencia alta detectada: {avg_time:.1f}s (normal < 10s)")
+        
+        # ANOMALÍA 2: Tasa de error elevada (> 20%)
+        if error_rate > 0.2:
+            anomalies.append(f"⚠️ Tasa de error elevada: {error_rate*100:.1f}% (normal < 20%)")
+        
+        # ANOMALÍA 3: Picos de latencia (alguna consulta > 15s)
+        if tiempos and max(tiempos) > 15:
+            anomalies.append(f"⚠️ Pico de latencia: {max(tiempos):.1f}s en última consulta")
+        
+        # ANOMALÍA 4: Cache ineficiente (tamaño cercano al límite)
+        cache_usage = len(self.search_cache) / 100  # Límite es 100
+        if cache_usage > 0.9:
+            anomalies.append(f"⚠️ Cache casi lleno: {len(self.search_cache)}/100 entradas (considerar limpiar)")
+        
+        # ANOMALÍA 5: Uso excesivo de tokens (> 50k tokens)
+        if self.token_usage["total"] > 50000:
+            anomalies.append(f"⚠️ Uso alto de tokens: {self.token_usage['total']:,} tokens (costo aumentando)")
+        
+        # ANOMALÍA 6: Alertas de emergencia frecuentes (> 30%)
+        if consultas > 5 and (self.metrics["alertas_emergencia"] / consultas) > 0.3:
+            anomalies.append(f"⚠️ Alta frecuencia de emergencias: {self.metrics['alertas_emergencia']} de {consultas} consultas")
+        
+        return anomalies
+    
+    def _get_memory_stats(self) -> Dict:
+        """IE2 - Obtiene estadísticas detalladas de uso de memoria y contexto"""
+        try:
+            # Calcular tamaño de la memoria
+            if isinstance(self.memory, ConversationSummaryMemory):
+                memory_size_bytes = sys.getsizeof(self.memory.buffer)
+                buffer_length = len(str(self.memory.buffer))
+                memory_type = "Summary (optimizada)"
+            else:
+                messages = self.memory.chat_memory.messages
+                memory_size_bytes = sum(sys.getsizeof(str(msg)) for msg in messages)
+                buffer_length = len(messages)
+                memory_type = "Buffer (completa)"
+            
+            return {
+                "tipo_memoria": memory_type,
+                "tamano_memoria_kb": round(memory_size_bytes / 1024, 2),
+                "elementos_en_memoria": buffer_length,
+                "memoria_eficiencia": "Alta" if memory_size_bytes < 50000 else "Media" if memory_size_bytes < 100000 else "Baja"
+            }
+        except Exception as e:
+            logger.warning(f"Error calculando estadísticas de memoria: {e}")
+            return {
+                "tipo_memoria": type(self.memory).__name__,
+                "tamano_memoria_kb": 0,
+                "elementos_en_memoria": 0,
+                "memoria_eficiencia": "N/A"
+            }
+    
+    def get_anomalies_report(self) -> Dict:
+        """IE4 - Genera reporte completo de anomalías detectadas con recomendaciones"""
+        anomalies = self._detect_anomalies()
+        
+        recommendations = []
+        if any("Latencia alta" in a for a in anomalies):
+            recommendations.append("💡 Considera: Optimizar búsquedas, reducir chunk_size, o usar cache más agresivo")
+        
+        if any("Tasa de error" in a for a in anomalies):
+            recommendations.append("💡 Considera: Revisar logs, validar PDFs de entrada, o ajustar timeout")
+        
+        if any("Cache casi lleno" in a for a in anomalies):
+            recommendations.append("💡 Acción: Ejecutar clear_cache() o aumentar límite de cache")
+        
+        if any("Uso alto de tokens" in a for a in anomalies):
+            recommendations.append("💡 Considera: Usar ConversationSummaryMemory, reducir k en búsquedas, o limpiar memoria")
         
         return {
-            "total_consultas": self.consultation_count,
-            "calidad_promedio": f"{avg_quality:.1f}/10",
-            "tipo_memoria": type(self.memory).__name__,
-            "modelo": self.llm.model_name
+            "anomalias_detectadas": len(anomalies),
+            "anomalias": anomalies,
+            "recomendaciones": recommendations,
+            "estado_sistema": "CRÍTICO" if len(anomalies) >= 3 else "ATENCIÓN" if len(anomalies) >= 1 else "NORMAL"
         }
+    
+    def clear_cache(self):
+        """IL3.4 - Limpia el cache de búsquedas"""
+        cache_size = len(self.search_cache)
+        self.search_cache.clear()
+        logger.info(f"Cache limpiado: {cache_size} entradas eliminadas")
+        return cache_size
     
     def reset_memory(self):
         """Limpia la memoria del agente"""

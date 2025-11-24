@@ -43,7 +43,7 @@ st.markdown("""
     }
     
     .user-message {
-        background-color: #E3F2FD;
+        background-color: #0a0a0a;
         border-left-color: #2196F3;
     }
     
@@ -150,7 +150,9 @@ def process_question(question: str):
             "tiempo": resultado.get("tiempo_respuesta", "N/A"),
             "calidad": resultado.get("calidad", 0),
             "herramientas": resultado.get("herramientas_usadas", 0),
-            "estado": resultado.get("estado", "desconocido")
+            "estado": resultado.get("estado", "desconocido"),
+            "tokens_estimados": resultado.get("tokens_estimados", 0),  
+            "trace": resultado.get("trace", {})  
         },
         "timestamp": datetime.now()
     })
@@ -168,7 +170,7 @@ def render_chat_message(message):
     if role == "user":
         st.markdown(f"""
         <div class="chat-message user-message">
-            <strong>Paciente</strong> <small>({timestamp})</small><br>
+            <strong> Paciente</strong> <small>({timestamp})</small><br>
             {content}
         </div>
         """, unsafe_allow_html=True)
@@ -177,22 +179,28 @@ def render_chat_message(message):
         calidad = metadata.get("calidad", 0)
         tiempo = metadata.get("tiempo", "N/A")
         herramientas = metadata.get("herramientas", 0)
+        tokens = metadata.get("tokens_estimados", 0)
         
         st.markdown(f"""
         <div class="chat-message assistant-message">
-            <strong>AI Assistant</strong> <small>({timestamp})</small><br>
+            <strong> AI Assistant</strong> <small>({timestamp})</small><br>
             {content}
         </div>
         """, unsafe_allow_html=True)
         
-        # Mostrar métricas de la respuesta
-        col1, col2, col3 = st.columns(3)
+        # Mostrar métricas de la respuesta 
+        col1, col2, col3, col4 = st.columns(4)
         with col1:
             st.metric("Tiempo", tiempo)
         with col2:
             st.metric("Calidad", f"{calidad:.1f}/10")
         with col3:
             st.metric("Herramientas", herramientas)
+        with col4:
+            st.metric("Tokens", f"~{tokens}")
+        
+        
+
 
 # ═══════════════════════════════════════════════════════════════
 # BARRA LATERAL - CONFIGURACIÓN
@@ -238,7 +246,7 @@ with st.sidebar:
         st.success("Agente activo")
         
         # Estadísticas
-        st.markdown("###Estadísticas")
+        st.markdown("### Estadísticas")
         
         stats = st.session_state.agent.get_statistics()
         
@@ -246,13 +254,40 @@ with st.sidebar:
         st.metric("Calidad Promedio", stats["calidad_promedio"])
         st.metric("Tipo Memoria", stats["tipo_memoria"])
         
+        # Métricas
+        st.markdown("---")
+        st.markdown("### Métricas")
+        
+        # Observabilidad
+        st.metric("Tiempo Promedio", stats.get("tiempo_promedio", "N/A"))
+        st.metric("Tasa de Éxito", stats.get("tasa_exito", "N/A"))
+        st.metric("Alertas Emergencia", stats.get("alertas_emergencia", 0))
+        
+        # Memoria y Contexto 
+        st.markdown("---")
+        st.markdown("### Memoria/Contexto")
+        st.metric("Tamaño", f"{stats.get('memoria_tamano_kb', 0)} KB")
+        st.metric("Elementos", stats.get("memoria_elementos", 0))
+        st.metric("Eficiencia", stats.get("memoria_eficiencia", "N/A"))
+        
+        # Escalabilidad
+        st.markdown("---")
+        st.markdown("### Escalabilidad")
+        st.metric("Cache Size", stats.get("cache_size", 0))
+        st.metric("Tokens Totales", stats.get("tokens_totales", 0))
+        st.metric("Costo Estimado", stats.get("costo_estimado_usd", "$0.00"))
+        
         # Botones de acción
         st.markdown("---")
-        st.markdown("###Acciones")
+        st.markdown("### Acciones")
         
         if st.button("Limpiar Memoria", use_container_width=True):
             st.session_state.agent.reset_memory()
             st.success("Memoria limpiada")
+        
+        if st.button("Limpiar Cache", use_container_width=True):
+            cache_size = st.session_state.agent.clear_cache()
+            st.success(f"Cache limpiado: {cache_size} entradas")
         
         if st.button("Limpiar Chat", use_container_width=True):
             st.session_state.chat_history = []
@@ -262,18 +297,7 @@ with st.sidebar:
     else:
         st.warning("Agente no inicializado")
     
-    # Información adicional
-    st.markdown("---")
-    st.markdown("### Información")
-    st.info("""
-    **Capacidades:**
-    - Búsqueda de síntomas
-    - Información de tratamientos
-    - Datos de medicamentos
-    - Detección de emergencias
-    - Análisis diferencial
-    - Validación de interacciones
-    """)
+    
     
     st.markdown("---")
     st.markdown("""
@@ -342,7 +366,7 @@ with tab1:
 # ─────────────────────────────────────────────────────────────
 
 with tab2:
-    st.markdown("### Métricas de Rendimiento")
+    st.markdown("### Métricas de Rendimiento ")
     
     if st.session_state.agent_initialized and st.session_state.consultation_count > 0:
         # Métricas principales
@@ -374,16 +398,125 @@ with tab2:
                 stats["modelo"]
             )
         
+        # Métricas avanzadas
+        st.markdown("---")
+        st.markdown("### Métricas Detalladas")
+        
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.markdown("**Observabilidad**")
+            st.metric("Tiempo Promedio", stats.get("tiempo_promedio", "N/A"))
+            st.metric("Tasa de Éxito", stats.get("tasa_exito", "N/A"))
+            st.metric("Errores", stats.get("errores", 0))
+        
+        with col2:
+            st.markdown("**Memoria/Contexto**")
+            st.metric("Tamaño Memoria", f"{stats.get('memoria_tamano_kb', 0)} KB")
+            st.metric("Elementos", stats.get("memoria_elementos", 0))
+            st.metric("Eficiencia", stats.get("memoria_eficiencia", "N/A"))
+        
+        with col3:
+            st.markdown("**Seguridad**")
+            st.metric("Alertas Emergencia", stats.get("alertas_emergencia", 0))
+            st.metric("Validaciones", stats.get("total_consultas", 0))
+            
+        with col4:
+            st.markdown("**Escalabilidad**")
+            st.metric("Tamaño Cache", stats.get("cache_size", 0))
+            st.metric("Tokens Totales", stats.get("tokens_totales", 0))
+        
+        # Detección de Anomalías 
+        st.markdown("---")
+        st.markdown("### Detección de Anomalías")
+        
+        estado_sistema = stats.get("estado_sistema", "NORMAL")
+        anomalias = stats.get("anomalias", [])
+        
+        
+        # Badge de estado del sistema
+        if estado_sistema == "CRÍTICO":
+            st.error(f"🚨 **Estado del Sistema: {estado_sistema}**")
+        elif estado_sistema == "ATENCIÓN":
+            st.warning(f"⚠️ **Estado del Sistema: {estado_sistema}**")
+        else:
+            st.success(f"✅ **Estado del Sistema: {estado_sistema}**")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("**Anomalías Detectadas:**")
+            if anomalias:
+                for anomalia in anomalias:
+                    st.warning(anomalia)
+            else:
+                st.info("No se detectaron anomalías")
+        
+        
+        
+        # Herramientas más usadas
+        st.markdown("---")
+        st.markdown("### Herramientas Más Utilizadas")
+        
+        if stats.get("herramientas_mas_usadas"):
+            total_consultas = stats.get("total_consultas", 1)
+            for tool, count in stats["herramientas_mas_usadas"].items():
+                st.progress(min(count / max(total_consultas, 1), 1.0), text=f"{tool}: {count} veces")
+        
         # Gráfico de calidad
         st.markdown("---")
-        st.markdown("#### Evolución de Calidad de Respuestas")
+        st.markdown("### Evolución de Calidad de Respuestas")
         
         if len(st.session_state.quality_scores) > 0:
-            st.line_chart(st.session_state.quality_scores)
+            import plotly.graph_objects as go
+            
+            # Gráfico de líneas con marcadores
+            fig = go.Figure()
+            
+            fig.add_trace(go.Scatter(
+                x=list(range(1, len(st.session_state.quality_scores) + 1)),
+                y=st.session_state.quality_scores,
+                mode='lines+markers',
+                name='Calidad',
+                line=dict(color='#1E88E5', width=3),
+                marker=dict(size=10, color='#1E88E5', symbol='circle',
+                           line=dict(color='white', width=2))
+            ))
+            
+            fig.update_layout(
+                title="Calidad de Respuestas por Consulta",
+                xaxis_title="Número de Consulta",
+                yaxis_title="Calidad (0-10)",
+                yaxis=dict(range=[0, 10]),
+                hovermode='x unified',
+                template='plotly_dark',
+                height=400
+            )
+            
+            st.plotly_chart(fig, use_container_width=True)
+        
+        # Trazabilidad 
+        st.markdown("---")
+        st.markdown("### Historial de Trazabilidad")
+        
+        trace_history = st.session_state.agent.get_trace_history(last_n=3)
+        if trace_history:
+            for i, trace in enumerate(reversed(trace_history), 1):
+                with st.expander(f"Consulta {len(trace_history) - i + 1}: {trace['consulta'][:50]}..."):
+                    st.write(f"**Timestamp:** {trace['timestamp']}")
+                    st.write(f"**Calidad:** {trace['calidad']:.1f}/10")
+                    st.write(f"**Pasos ejecutados:** {len(trace['trace'])}")
+                    
+                    if trace['trace']:
+                        st.write("**Flujo de ejecución:**")
+                        for j, step in enumerate(trace['trace'], 1):
+                            st.text(f"{j}. [{step['step_type']}] Tool: {step.get('tool', 'N/A')}")
+        else:
+            st.info("No hay historial de trazabilidad disponible")
         
         # Resumen de memoria
         st.markdown("---")
-        st.markdown("#### Estado de la Memoria")
+        st.markdown("### Estado de la Memoria")
         
         memory_summary = st.session_state.agent.get_memory_summary()
         st.text_area("Resumen", memory_summary, height=200, disabled=True)
@@ -399,7 +532,7 @@ with tab3:
     st.markdown("### Guía de Uso")
     
     st.markdown("""
-    ## Cómo Usar el Agente Médico
+    ## Cómo Usar el Agente Médico 
     
     ### Inicialización
     1. Configura el **directorio de PDFs** con documentos médicos
@@ -411,6 +544,43 @@ with tab3:
     - Escribe tu pregunta médica en el área de texto
     - Sé específico con los síntomas
     - Puedes hacer preguntas de seguimiento (el agente recuerda el contexto)
+    
+    
+    #### Observabilidad
+    - **Logging estructurado**: Todas las consultas se registran en `medical_agent.log`
+    - **Métricas de rendimiento**: Tiempo de respuesta, tasa de éxito, errores
+    - **Alertas de emergencia**: Contador de síntomas críticos detectados
+    - **Uso de herramientas**: Tracking de qué herramientas se usan más
+    
+    #### Trazabilidad
+    - **Árbol de decisiones**: Cada respuesta incluye el flujo de razonamiento
+    - **Historial de traces**: Revisa cómo el agente llegó a sus conclusiones
+    - **Pasos intermedios**: Visualiza qué herramientas se usaron y cuándo
+    - Ver en "Ver Trazabilidad" bajo cada respuesta del agente
+    
+    #### Seguridad y Ética
+    - **Validación de entrada**: Rechaza consultas inapropiadas o datos sensibles
+    - **Sanitización de respuestas**: Evita lenguaje de certeza médica absoluta
+    - **Disclaimers automáticos**: Todas las respuestas incluyen aviso legal
+    - **Detección de emergencias**: Sistema de triaje automático prioritario
+    
+    #### Escalabilidad y Sostenibilidad
+    - **Caching inteligente**: Las búsquedas repetidas se sirven desde cache
+    - **Optimización de tokens**: Estimación y tracking de uso de tokens
+    - **Estimación de costos**: Calcula el costo aproximado de cada consulta
+    - **Límite de cache**: Máximo 100 entradas para evitar sobrecarga de memoria
+    
+    #### Métricas de Memoria y Contexto 
+    - **Tracking de memoria**: Monitorea tamaño y eficiencia de la memoria del agente
+    - **Elementos en contexto**: Cuenta mensajes o resumen almacenado
+    - **Eficiencia calculada**: Clasifica uso de memoria como Alta/Media/Baja
+    - **Optimización automática**: Usa ConversationSummaryMemory para ahorrar memoria
+    
+    #### Detección de Anomalías 
+    - **6 tipos de anomalías detectadas**: Latencia, errores, cache, tokens, emergencias, picos
+    - **Alertas automáticas**: El sistema te avisa cuando detecta patrones inusuales
+    - **Estado del sistema**: CRÍTICO/ATENCIÓN/NORMAL según anomalías encontradas
+    - Ver en pestaña "Estadísticas" > "Detección de Anomalías"
     
     ### Tipos de Consultas Soportadas
     
@@ -435,17 +605,19 @@ with tab3:
     - **Tiempo de respuesta**: Velocidad de procesamiento
     - **Calidad**: Score de 0-10 basado en relevancia y completitud
     - **Herramientas usadas**: Número de búsquedas realizadas
+    - **Tokens**: Estimación de tokens consumidos 
+    - **Trazabilidad**: Árbol de decisión expandible 
     
-    ### Importante
+    ### ⚠️ Importante
     
     - Este sistema es **solo educativo**
     - **NO reemplaza** consulta médica profesional
     - Ante síntomas graves, acude a **urgencias inmediatamente**
-    - El agente detecta emergencias y te alertará si es necesario
-    
+    - El agente detecta emergencias y te alertará si es necesario 
     ### Mantenimiento
     
-    - **Limpiar Memoria**: Borra el contexto de conversación (útil para nueva sesión)
+    - **Limpiar Memoria**: Borra el contexto de conversación 
+    - **Limpiar Cache**: Elimina búsquedas cacheadas 
     - **Limpiar Chat**: Reinicia completamente el historial visual
     
     ### Base de Conocimiento
@@ -457,30 +629,35 @@ with tab3:
     - Literatura médica revisada por pares
     
     Agrega PDFs médicos al directorio configurado para mejorar respuestas.
+    
+    ### Monitoreo y Métricas
+    
+    Revisa la pestaña **Estadísticas** para ver:
+    - Métricas de observabilidad 
+    - Historial de trazabilidad 
+    - Estadísticas de seguridad 
+    - Métricas de escalabilidad y costos 
     """)
     
     # Información técnica
     st.markdown("---")
     st.markdown("### Información Técnica")
-    
-    with st.expander("Módulos Integrados (RA2)"):
-        st.markdown("""
-        - Arquitectura de agentes con herramientas especializadas
-        - Sistema de memoria avanzado (Summary/Buffer)
-        - Planificación jerárquica y análisis diferencial
-        - Retrieval-Augmented Generation con evaluación de calidad
-        - Detección automática de emergencias médicas
-        """)
+
     
     with st.expander("Herramientas Disponibles"):
         st.markdown("""
-        1. **BuscarSintomas**: Información sobre manifestaciones clínicas
-        2. **BuscarTratamientos**: Opciones terapéuticas disponibles
-        3. **BuscarMedicamentos**: Detalles de fármacos específicos
+        1. **BuscarSintomas**: Información sobre manifestaciones clínicas 
+        2. **BuscarTratamientos**: Opciones terapéuticas disponibles 
+        3. **BuscarMedicamentos**: Detalles de fármacos específicos 
         4. **AnalisisDiferencial**: Diagnóstico diferencial sistemático
         5. **ValidarInteracciones**: Verificación de interacciones medicamentosas
-        6. **DetectarEmergencia**: Sistema de triaje automático
+        6. **DetectarEmergencia**: Sistema de triaje automático 
         7. **EvaluarRelevancia**: Evaluación de calidad de información
+        
+        **Todas las herramientas incluyen:**
+        - Tracking de uso 
+        - Trazabilidad de ejecución 
+        - Optimización con cache 
         """)
 
 # ═══════════════════════════════════════════════════════════════
@@ -491,8 +668,6 @@ st.markdown("---")
 st.markdown(f"""
 <div style='text-align: center; color: #666;'>
     <small>
-    AI Assistant | Sistema Integrado <br>
-    Última actualización: {datetime.now().strftime("%Y-%m-%d")}<br>
     Creado por Ignacio Mella & Benjamín Mella - UwU
     </small>
 </div>
