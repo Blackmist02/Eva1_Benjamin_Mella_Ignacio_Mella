@@ -316,7 +316,7 @@ Cada respuesta es evaluada con múltiples criterios:
 - Tipo de memoria utilizada
 - Modelo LLM activo
 
-**IL3.1 - Observabilidad:**
+**Observabilidad:**
 - ⏱️ Tiempo promedio de respuesta
 - ✅ Tasa de éxito (%)
 - ❌ Número de errores
